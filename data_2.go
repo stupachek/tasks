@@ -14,11 +14,6 @@ type User struct {
 	Books  []string
 }
 
-type UserString struct {
-	User
-	Row string
-}
-
 func Users() []User {
 	return []User{
 		{
@@ -75,15 +70,16 @@ func max(a, b int) int {
 
 const nameLength = 10
 
-func main() {
+var (
+	maxNameLength   = len("Name")
+	maxBookLength   = len("Books")
+	maxAgeLength    = len("Age")
+	maxActiveLenght = len("Active")
+	maxMassLength   = len("Mass")
+)
 
-	users := Users()
+func formatUsers(users []User) string {
 	usersStr := make([]string, len(users))
-	maxNameLength := len("Name")
-	maxBookLength := len("Books")
-	maxAgeLength := len("Age")
-	maxActiveLenght := len("Active")
-	maxMassLength := len("Mass")
 	for i, user := range users {
 		users[i].Name = strings.Trim(user.Name, " ")
 		for len(users[i].Name) > nameLength {
@@ -111,13 +107,46 @@ func main() {
 		active = strings.Replace(active, "false", "-", 1)
 		active = fmt.Sprintf("%*s", maxActiveLenght, active)
 		mass := fmt.Sprintf("% *.2f", maxMassLength-2, user.Mass)
-		for j, book := range users[i].Books {
-			users[i].Books[j] = fmt.Sprintf("%*s", maxBookLength, book)
-		}
 		books := strings.Join(users[i].Books, spacesBeforeBook)
 		usersStr[i] = strings.Join([]string{name, age, active, mass, books}, " | ")
 	}
-	fmt.Printf("%*s | %*s | %*s | %*s | %*s\n", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength-2, "Mass", maxBookLength, "Book")
-	fmt.Println(strings.Join(usersStr, "\n"))
+	delimiter := strings.ReplaceAll(spacesBeforeBook, " ", "_") + strings.Repeat("_", maxBookLength) + "\n"
+	header := fmt.Sprintf("%*s | %*s | %*s | %*s | %s", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength-2, "Mass", "Book") + delimiter
+	return header + strings.Join(usersStr, delimiter)
+}
+
+func averageAge(users []User) map[string]int {
+	bookCounter := make(map[string]int)
+	averageBookAge := make(map[string]int)
+	for _, user := range users {
+		for _, book := range user.Books {
+			bookCounter[book]++
+			averageBookAge[book] += user.Age
+		}
+	}
+	for book := range averageBookAge {
+		averageBookAge[book] /= bookCounter[book]
+	}
+	return averageBookAge
+
+}
+
+func strAvetageAge(averageBookAge map[string]int) string {
+	averageTitle := "Avegare age"
+	stringAverageAge := fmt.Sprintf("%*s | %s\n", maxBookLength, "Book", averageTitle)
+	delimiter := strings.Repeat("_", maxBookLength) + " | " + strings.Repeat("_", len(averageTitle)) + "\n"
+	stringAverageAge += delimiter
+	for book := range averageBookAge {
+		stringAverageAge += fmt.Sprintf("%*s | %*d\n", maxBookLength, book, len(averageTitle), averageBookAge[book])
+		stringAverageAge += delimiter
+	}
+	return stringAverageAge
+}
+
+func main() {
+	users := Users()
+	fmt.Println(formatUsers((users)))
+	averageAge := averageAge(users)
+	fmt.Println(strAvetageAge(averageAge))
 
 }
