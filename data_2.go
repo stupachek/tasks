@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 type User struct {
@@ -68,7 +71,7 @@ func max(a, b int) int {
 	return b
 }
 
-const nameLength = 10
+const nameLength = 8
 
 var (
 	maxNameLength   = len("Name")
@@ -80,25 +83,6 @@ var (
 
 func formatUsers(users []User) string {
 	usersStr := make([]string, len(users))
-	for i, user := range users {
-		users[i].Name = strings.Trim(user.Name, " ")
-		for len(users[i].Name) > nameLength {
-			decoded, err := base64.StdEncoding.DecodeString(strings.Split(users[i].Name, "\n")[0])
-			if err != nil {
-				panic(err)
-			}
-			users[i].Name = string(decoded)
-		}
-		users[i].Name = fmt.Sprintf("%q", users[i].Name)
-		maxNameLength = max(maxNameLength, len(users[i].Name))
-		maxAgeLength = max(maxAgeLength, len(fmt.Sprintf("%+d", user.Age)))
-		maxMassLength = max(maxMassLength, len(fmt.Sprintf("%f", user.Mass)))
-		for j, book := range users[i].Books {
-			users[i].Books[j] = fmt.Sprintf("%q", strings.TrimSpace(book))
-			maxBookLength = max(maxBookLength, len(users[i].Books[j]))
-		}
-
-	}
 	spacesBeforeBook := "\n" + strings.Join([]string{strings.Repeat(" ", maxNameLength), strings.Repeat(" ", maxAgeLength), strings.Repeat(" ", maxActiveLenght), strings.Repeat(" ", maxMassLength-1)}, " | ") + "| "
 	for i, user := range users {
 		name := fmt.Sprintf("%*s", maxNameLength, users[i].Name)
@@ -113,6 +97,28 @@ func formatUsers(users []User) string {
 	delimiter := strings.ReplaceAll(spacesBeforeBook, " ", "_") + strings.Repeat("_", maxBookLength) + "\n"
 	header := fmt.Sprintf("%*s | %*s | %*s | %*s | %s", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength-2, "Mass", "Book") + delimiter
 	return header + strings.Join(usersStr, delimiter)
+}
+
+func prepareUsers(users []User) {
+	for i, user := range users {
+		users[i].Name = strings.Trim(user.Name, " ")
+		for len(users[i].Name) > nameLength {
+			decoded, err := base64.StdEncoding.DecodeString(strings.Split(users[i].Name, "\n")[0])
+			if err != nil {
+				break
+			}
+			users[i].Name = string(decoded)
+		}
+		users[i].Name = fmt.Sprintf("%q", users[i].Name)
+		maxNameLength = max(maxNameLength, len(users[i].Name))
+		maxAgeLength = max(maxAgeLength, len(fmt.Sprintf("%+d", user.Age)))
+		maxMassLength = max(maxMassLength, len(fmt.Sprintf("%f", user.Mass)))
+		for j, book := range users[i].Books {
+			users[i].Books[j] = fmt.Sprintf("%q", strings.TrimSpace(book))
+			maxBookLength = max(maxBookLength, len(users[i].Books[j]))
+		}
+
+	}
 }
 
 func averageAge(users []User) map[string]int {
@@ -145,8 +151,44 @@ func strAvetageAge(averageBookAge map[string]int) string {
 
 func main() {
 	users := Users()
+	prepareUsers(users)
 	fmt.Println(formatUsers((users)))
 	averageAge := averageAge(users)
 	fmt.Println(strAvetageAge(averageAge))
+	slices.SortFunc(users, func(a User, b User) bool {
+		var bookA, bookB int
+		for _, book := range a.Books {
+			bookA += averageAge[book]
+		}
+		for _, book := range b.Books {
+			bookB += averageAge[book]
+		}
+		return bookA < bookB
+	})
+	fmt.Println("________Sort by sum of books average age_______")
+	fmt.Println(formatUsers((users)))
+	mass := 80.0
+	fmt.Printf("________Nearest to mass %.1f_______\n", mass)
+	fmt.Println(formatUsers([]User{nearestMass(users, mass)}))
+}
 
+func nearestMass(users []User, target float64) User {
+	slices.SortFunc(users, func(a User, b User) bool {
+		return a.Mass < b.Mass
+	})
+	i, ok := slices.BinarySearchFunc(users, target, func(u User, mass float64) int {
+		if u.Mass < mass {
+			return -1
+		}
+		if u.Mass > mass {
+			return 1
+		}
+		return 0
+	})
+	if !ok && i != 0 {
+		if math.Abs(target-users[i-1].Mass) < math.Abs(target-users[i].Mass) {
+			return users[i-1]
+		}
+	}
+	return users[i]
 }
