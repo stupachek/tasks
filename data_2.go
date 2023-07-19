@@ -9,12 +9,40 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type UserType int8
+
+const (
+	Organizer UserType = iota
+	Critic
+	CasualReader
+	NonFictionBuff
+	NewbieReader
+)
+
+func (u UserType) String() string {
+	switch u {
+	case Organizer:
+		return "Organizer"
+	case Critic:
+		return "Critic"
+	case CasualReader:
+		return "Casual Reader"
+	case NonFictionBuff:
+		return "Non-Fiction Buff"
+	case NewbieReader:
+		return "Newbie Reader"
+	default:
+		return "Unknown"
+	}
+}
+
 type User struct {
-	Name   string
-	Age    int
-	Active bool
-	Mass   float64
-	Books  []string
+	Name     string
+	Age      int
+	Active   bool
+	Mass     float64
+	UserType UserType
+	Books    []string
 }
 
 func Users() []User {
@@ -24,6 +52,7 @@ func Users() []User {
 			30,
 			true,
 			80.0,
+			CasualReader,
 			[]string{"Harry Potter", "1984"},
 		},
 		{
@@ -31,6 +60,7 @@ func Users() []User {
 			20,
 			false,
 			60.0,
+			NewbieReader,
 			[]string{},
 		},
 		{
@@ -38,6 +68,7 @@ func Users() []User {
 			150,
 			true,
 			.75,
+			NonFictionBuff,
 			[]string{"Harry Potter", "Game of Thrones"},
 		},
 		{
@@ -45,6 +76,7 @@ func Users() []User {
 			-10,
 			true,
 			8000.0,
+			9,
 			[]string{"Harry Potter"},
 		},
 		{
@@ -52,6 +84,7 @@ func Users() []User {
 			0,
 			true,
 			0,
+			Organizer,
 			[]string{"The Hunger Games"},
 		},
 		{
@@ -59,6 +92,7 @@ func Users() []User {
 			0,
 			true,
 			0,
+			Critic,
 			[]string{"Moby Dick", "It", "The Green Mile"},
 		},
 	}
@@ -72,6 +106,7 @@ func max(a, b int) int {
 }
 
 const nameLength = 8
+const maxTypeLength = len("Non-Fiction Buff")
 
 var (
 	maxNameLength   = len("Name")
@@ -83,19 +118,20 @@ var (
 
 func formatUsers(users []User) string {
 	usersStr := make([]string, len(users))
-	spacesBeforeBook := "\n" + strings.Join([]string{strings.Repeat(" ", maxNameLength), strings.Repeat(" ", maxAgeLength), strings.Repeat(" ", maxActiveLenght), strings.Repeat(" ", maxMassLength-1)}, " | ") + "| "
+	spacesBeforeBook := "\n" + strings.Join([]string{strings.Repeat(" ", maxNameLength), strings.Repeat(" ", maxAgeLength), strings.Repeat(" ", maxActiveLenght), strings.Repeat(" ", maxMassLength), strings.Repeat(" ", maxTypeLength)}, " | ") + " | "
 	for i, user := range users {
 		name := fmt.Sprintf("%*s", maxNameLength, users[i].Name)
 		age := fmt.Sprintf("%+*d", maxAgeLength, user.Age)
 		active := strings.Replace(fmt.Sprint(user.Active), "true", "+", 1)
 		active = strings.Replace(active, "false", "-", 1)
 		active = fmt.Sprintf("%*s", maxActiveLenght, active)
-		mass := fmt.Sprintf("% *.2f", maxMassLength-2, user.Mass)
+		mass := fmt.Sprintf("% *.2f", maxMassLength, user.Mass)
+		userType := fmt.Sprintf("%*s", maxTypeLength, user.UserType)
 		books := strings.Join(users[i].Books, spacesBeforeBook)
-		usersStr[i] = strings.Join([]string{name, age, active, mass, books}, " | ")
+		usersStr[i] = strings.Join([]string{name, age, active, mass, userType, books}, " | ")
 	}
 	delimiter := strings.ReplaceAll(spacesBeforeBook, " ", "_") + strings.Repeat("_", maxBookLength) + "\n"
-	header := fmt.Sprintf("%*s | %*s | %*s | %*s | %s", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength-2, "Mass", "Book") + delimiter
+	header := fmt.Sprintf("%*s | %*s | %*s | %*s | %*s | %s", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength, "Mass", maxTypeLength, "Type", "Book") + delimiter
 	return header + strings.Join(usersStr, delimiter)
 }
 
@@ -149,6 +185,26 @@ func strAvetageAge(averageBookAge map[string]int) string {
 	return stringAverageAge
 }
 
+func nearestMass(users []User, target float64) User {
+	slices.SortFunc(users, func(a User, b User) bool {
+		return a.Mass < b.Mass
+	})
+	i, ok := slices.BinarySearchFunc(users, target, func(u User, mass float64) int {
+		if u.Mass < mass {
+			return -1
+		}
+		if u.Mass > mass {
+			return 1
+		}
+		return 0
+	})
+	if !ok && i != 0 {
+		if math.Abs(target-users[i-1].Mass) < math.Abs(target-users[i].Mass) {
+			return users[i-1]
+		}
+	}
+	return users[i]
+}
 func main() {
 	users := Users()
 	prepareUsers(users)
@@ -170,25 +226,5 @@ func main() {
 	mass := 80.0
 	fmt.Printf("________Nearest to mass %.1f_______\n", mass)
 	fmt.Println(formatUsers([]User{nearestMass(users, mass)}))
-}
 
-func nearestMass(users []User, target float64) User {
-	slices.SortFunc(users, func(a User, b User) bool {
-		return a.Mass < b.Mass
-	})
-	i, ok := slices.BinarySearchFunc(users, target, func(u User, mass float64) int {
-		if u.Mass < mass {
-			return -1
-		}
-		if u.Mass > mass {
-			return 1
-		}
-		return 0
-	})
-	if !ok && i != 0 {
-		if math.Abs(target-users[i-1].Mass) < math.Abs(target-users[i].Mass) {
-			return users[i-1]
-		}
-	}
-	return users[i]
 }
