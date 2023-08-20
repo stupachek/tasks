@@ -8,19 +8,21 @@ import (
 	"io"
 	"math"
 	"strings"
-	"unsafe"
 
 	"golang.org/x/exp/slices"
 )
 
-const maxUsers int = 8
+const (
+	maxUsers int = 8
+)
+
+var active uint8 = 0
 
 type User struct {
-	Name   string   // uint8(length) + [length]byte
-	Age    uint64   // 1 bit bool (active field) + 63 bit uint (age field)
-	Active bool     // (see above)
-	Mass   float64  // regular float64
-	Books  []string // uint8(all books length) + [length]byte, all books come as a single comma-separated string
+	Name  string   // uint8(length) + [length]byte
+	Age   uint64   // 1 bit bool (active field) + 63 bit uint (age field)
+	Mass  float64  // regular float64
+	Books []string // uint8(all books length) + [length]byte, all books come as a single comma-separated string
 }
 
 type UserFromBinary struct {
@@ -31,8 +33,8 @@ type UserFromBinary struct {
 
 func Users(r io.Reader) ([]User, error) {
 	out := []User{}
-	for i := 1; i < maxUsers; i++ {
-		user, err := ReadUser(&r)
+	for i := 0; i < maxUsers; i++ {
+		user, err := ReadUser(&r, i)
 		if err != nil {
 			break
 		}
@@ -41,7 +43,7 @@ func Users(r io.Reader) ([]User, error) {
 	return out, nil
 }
 
-func ReadUser(r *io.Reader) (User, error) {
+func ReadUser(r *io.Reader, position int) (User, error) {
 	var nameLength uint8
 	if err := binary.Read(*r, binary.BigEndian, &nameLength); err != nil {
 		return User{}, err
@@ -55,7 +57,8 @@ func ReadUser(r *io.Reader) (User, error) {
 		return User{}, err
 	}
 	bitmask := uint64(math.Exp2(64))
-	active := ActiveAge & bitmask >> (64 - 1)
+	activeUser := uint8(ActiveAge & bitmask >> (64 - 1))
+	active ^= activeUser << (position)
 	age := ActiveAge << 1
 	age = age >> 1
 	var mass float64
@@ -72,11 +75,10 @@ func ReadUser(r *io.Reader) (User, error) {
 	}
 	books := strings.Split(string(book), ",")
 	return User{
-		Name:   string(name),
-		Age:    age,
-		Active: *(*bool)(unsafe.Pointer(&active)),
-		Mass:   mass,
-		Books:  books,
+		Name:  string(name),
+		Age:   age,
+		Mass:  mass,
+		Books: books,
 	}, nil
 }
 
@@ -91,32 +93,65 @@ func Reader() io.Reader {
 	)
 }
 
-const nameLength = 8
+const (
+	nameLength = 8
+	Name       = "Name"
+	Books      = "Books"
+	Age        = "Age"
+	Active     = "Active (total %d)"
+	Mass       = "Mass"
+)
 
 var (
-	maxNameLength   = len("Name")
-	maxBookLength   = len("Books")
-	maxAgeLength    = len("Age")
-	maxActiveLenght = len("Active")
-	maxMassLength   = len("Mass")
+	maxNameLength   = len(Name)
+	maxBookLength   = len(Books)
+	maxAgeLength    = len(Age)
+	maxActiveLenght = len(Active)
+	maxMassLength   = len(Mass)
 )
+
+func count(n uint8) int {
+	counter := 0
+	for i := 0; i < 8; i++ {
+		counter += int(n & 1)
+		n >>= 1
+	}
+	return counter
+}
+
+func delimiterPattern(vertical, horizontal string) string {
+	return strings.Join([]string{strings.Repeat(vertical, maxNameLength), strings.Repeat(vertical, maxAgeLength), strings.Repeat(vertical, maxActiveLenght), strings.Repeat(vertical, maxMassLength-2), strings.Repeat(vertical, maxBookLength)}, horizontal)
+}
 
 func formatUsers(users []User) string {
 	usersStr := make([]string, len(users))
-	spacesBeforeBook := "\n" + strings.Join([]string{strings.Repeat(" ", maxNameLength), strings.Repeat(" ", maxAgeLength), strings.Repeat(" ", maxActiveLenght), strings.Repeat(" ", maxMassLength-1)}, " | ") + "| "
+	upperBound := "┏" + delimiterPattern("━", "━┳━") + "┓\n"
+	spacesBeforeBook := delimiterPattern(" ", " ┃ ")
+	spacesBeforeBook = spacesBeforeBook[:len(spacesBeforeBook)-maxBookLength]
+	lowerBound := "\n┗" + delimiterPattern("━", "━┻━") + "┛"
 	for i, user := range users {
 		name := fmt.Sprintf("%*s", maxNameLength, users[i].Name)
-		age := fmt.Sprintf("%+*d", maxAgeLength, user.Age)
-		active := strings.Replace(fmt.Sprint(user.Active), "true", "+", 1)
-		active = strings.Replace(active, "false", "-", 1)
-		active = fmt.Sprintf("%*s", maxActiveLenght, active)
+		age := fmt.Sprintf("%*d", maxAgeLength, user.Age)
+		activeMask := active & (1 << uint8(i))
+		activestr := fmt.Sprintf("%*s", maxActiveLenght, "-")
+		if activeMask > 0 {
+			activestr = fmt.Sprintf("%*s", maxActiveLenght, "+")
+		}
 		mass := fmt.Sprintf("% *.2f", maxMassLength-2, user.Mass)
-		books := strings.Join(users[i].Books, spacesBeforeBook)
-		usersStr[i] = strings.Join([]string{name, age, active, mass, books}, " | ")
+		bookFormat(user.Books)
+		books := strings.Join(users[i].Books, "┃\n┃"+spacesBeforeBook)
+		usersStr[i] = "┃" + strings.Join([]string{name, age, activestr, mass, books}, " ┃ ") + "┃"
 	}
-	delimiter := strings.ReplaceAll(spacesBeforeBook, " ", "_") + strings.Repeat("_", maxBookLength) + "\n"
-	header := fmt.Sprintf("%*s | %*s | %*s | %*s | %s", maxNameLength, "Name", maxAgeLength, "Age", maxActiveLenght, "Active", maxMassLength-2, "Mass", "Book") + delimiter
-	return header + strings.Join(usersStr, delimiter)
+	delimiter := "\n┣" + delimiterPattern("━", "━╋━") + "┫\n"
+	activeHeader := fmt.Sprintf(Active, count(active))
+	header := fmt.Sprintf("┃%*s ┃ %*s ┃ %*s ┃ %*s ┃ %*s┃", maxNameLength, Name, maxAgeLength, Age, maxActiveLenght, activeHeader, maxMassLength-2, Mass, maxBookLength, Books) + delimiter
+	return upperBound + header + strings.Join(usersStr, delimiter) + lowerBound
+}
+
+func bookFormat(books []string) {
+	for i, book := range books {
+		books[i] = fmt.Sprintf("%*s", maxBookLength, book)
+	}
 }
 
 func prepareUsers(users []User) {
