@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"epam/model"
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -30,13 +29,10 @@ func Insert(data model.User, fileName string) error {
 	row = append(row, byte(uint8(len(name))))
 	row = append(row, name...)
 	var activeAge uint64 = data.Age
-	fmt.Printf("age %b", activeAge)
 	if data.Active {
 		bitmask := uint64(math.Exp2(64))
-		fmt.Printf("bitmask %b", bitmask)
 		activeAge |= bitmask
 	}
-	fmt.Printf("activeAge %b", activeAge)
 	binaryAge := make([]byte, 8)
 	binary.BigEndian.PutUint64(binaryAge, activeAge)
 	row = append(row, binaryAge...)
@@ -65,7 +61,7 @@ const (
 func Users(r io.Reader) []model.User {
 	out := []model.User{}
 	for i := 0; i < maxUsers; i++ {
-		user, err := ReadUser(&r)
+		user, err := ReadUser(r)
 		if err != nil || user.Name == "" {
 			break
 		}
@@ -74,17 +70,17 @@ func Users(r io.Reader) []model.User {
 	return out
 }
 
-func ReadUser(r *io.Reader) (model.User, error) {
+func ReadUser(r io.Reader) (model.User, error) {
 	var nameLength uint8
-	if err := binary.Read(*r, binary.BigEndian, &nameLength); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &nameLength); err != nil {
 		return model.User{}, err
 	}
 	name := make([]byte, nameLength)
-	if err := binary.Read(*r, binary.BigEndian, &name); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &name); err != nil {
 		return model.User{}, err
 	}
 	var ActiveAge uint64
-	if err := binary.Read(*r, binary.BigEndian, &ActiveAge); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &ActiveAge); err != nil {
 		return model.User{}, err
 	}
 	bitmask := uint64(math.Exp2(64))
@@ -92,15 +88,15 @@ func ReadUser(r *io.Reader) (model.User, error) {
 	age := ActiveAge << 1
 	age = age >> 1
 	var mass float64
-	if err := binary.Read(*r, binary.BigEndian, &mass); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &mass); err != nil {
 		return model.User{}, err
 	}
 	var bookLength uint8
-	if err := binary.Read(*r, binary.BigEndian, &bookLength); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &bookLength); err != nil {
 		return model.User{}, err
 	}
 	book := make([]byte, bookLength)
-	if err := binary.Read(*r, binary.BigEndian, &book); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &book); err != nil {
 		return model.User{}, err
 	}
 	books := strings.Split(string(book), ",")
