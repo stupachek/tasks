@@ -2,8 +2,11 @@ package main
 
 import (
 	"epam/cli"
+	"time"
 )
 
 func main() {
-	cli.ReadCL()
+	n := cli.NewConnection()
+	cli.ReadCL(&n)
+	time.Sleep(time.Millisecond * 100)
 }

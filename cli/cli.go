@@ -5,16 +5,63 @@ import (
 	"epam/format"
 	"epam/model"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 )
 
-var FileName string
+type UserInterface interface {
+	Command() string
+	File()
+}
 
-func ReadCL() {
+type CommandLine struct{}
+
+func (c *CommandLine) Command() string {
 	var op string
 	fmt.Print("> ")
 	fmt.Scanf("%s\n", &op)
+	return op
+}
+
+func (c *CommandLine) File() {
+	fmt.Print("> File: ")
+	fmt.Scanf("%s\n", &FileName)
+}
+
+type Net struct {
+	conn net.Conn
+}
+
+func NewConnection() Net {
+	l, _ := net.Listen("tcp", ":8080")
+	for {
+		conn, _ := l.Accept()
+		n := Net{
+			conn: conn,
+		}
+		return n
+	}
+}
+
+func (n *Net) Command() string {
+	n.conn.Write([]byte("> "))
+	op := make([]byte, 10)
+	num, _ := n.conn.Read(op)
+	return string(op[:num])
+}
+
+func (n *Net) File() {
+	n.conn.Write([]byte("> File: "))
+	file := make([]byte, 10)
+	num, _ := n.conn.Read(file)
+	FileName = string(file[:num])
+}
+
+var FileName string
+
+func ReadCL(ui UserInterface) {
+	op := ui.Command()
 	switch op {
 	case "INSERT":
 		var name string
@@ -24,8 +71,7 @@ func ReadCL() {
 		var book string
 		books := make([]string, 0)
 		if FileName == "" {
-			fmt.Print("> File: ")
-			fmt.Scanf("%s\n", &FileName)
+			ui.File()
 		}
 		fmt.Print("> Name: ")
 		fmt.Scanf("%s\n", &name)
@@ -96,6 +142,6 @@ func ReadCL() {
 	default:
 		fmt.Println("Unknown command!Try again.")
 	}
-	ReadCL()
+	ReadCL(ui)
 
 }
